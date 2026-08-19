@@ -1,9 +1,7 @@
 package com.gabriel.gestorfinanciero.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 
 @Entity
 public class Gasto {
@@ -14,34 +12,31 @@ public class Gasto {
     private int monto; // MONTO EN INT YA QUE ESTÁ PENNSADO PARA CLP
     private String descripcion;
 
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
 
 
     //Constructor
-    public Gasto(){}
+    public Gasto() {
+    }
 
     public Gasto(int monto, String descripcion) {
         this.monto = monto;
         this.descripcion = descripcion;
+
     }
 
     //Getters y Setters
-    public Long getId(){
-        return id;
-    }
+    public Long getId() {return id;}
+    public int getMonto() {return monto;}
 
-    public int getMonto(){
-        return monto;
-    }
+    public void setMonto(int monto) {this.monto = monto;}
 
-    public void setMonto(int monto){
-        this.monto = monto;
-    }
+    public String getDescripcion() {return descripcion;}
+    public void setDescripcion(String descripcion) {this.descripcion = descripcion;}
 
-    public String getDescripcion(){
-        return descripcion;
-    }
-
-    public void setDescripcion(String descripcion){
-        this.descripcion = descripcion;
-    }
+    public Usuario getUsuario(){return usuario;}
+    public void setUsuario(Usuario usuario){this.usuario = usuario;}
 }
