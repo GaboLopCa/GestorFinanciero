@@ -21,32 +21,33 @@ public class JwtFilter extends OncePerRequestFilter {
         this.jwtUtils = jwtUtils;
     }
 
+    // Este método indica a Spring Security que NO ejecute el filtro en rutas de autenticación
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        return path.startsWith("/auth/");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Buscamos la cabecera "Authorization" en la petición HTTP
         String authHeader = request.getHeader("Authorization");
 
-        // 2. Verificamos si la cabecera existe y empieza con "Bearer" (formato estándar de tokens)
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7); // Extraemos el token quitando la palabra "Bearer"
+            String token = authHeader.substring(7);
 
-            // 3. Validamos si el token es legítimo
             if (jwtUtils.validarToken(token)) {
                 String email = jwtUtils.obtenerEmailDelToken(token);
 
-                // 4. Creamos la credencial de autenticación para Spring Security
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         email, null, new ArrayList<>()
                 );
 
-                // 5. Registramos al usuario como autenticado en el contexto actual de la petición
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
 
-        // 6. Dejamos que la petición continúe su camino hacia el controlador
         filterChain.doFilter(request, response);
     }
 }

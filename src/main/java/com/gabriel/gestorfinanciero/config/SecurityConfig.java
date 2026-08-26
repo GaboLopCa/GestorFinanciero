@@ -1,10 +1,9 @@
 package com.gabriel.gestorfinanciero.config;
 
-// 1. Agrega este import (asegúrate de que el paquete coincida con la ubicación real de tu JwtFilter)
 import com.gabriel.gestorfinanciero.security.JwtFilter;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod; // Importante para definir el método OPTIONS
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -33,7 +32,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Permite pre-flights CORS
+                        .requestMatchers("/auth/**").permitAll() // Permite registro y login
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
