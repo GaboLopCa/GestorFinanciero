@@ -23,7 +23,7 @@ public class Ingreso {
     private Usuario usuario;
 
     public Ingreso(){
-        this.fecha = LocalDate.now()
+        this.fecha = LocalDate.now();
     }
 
     public Ingreso(String descripcion, int monto, String fuente, Usuario usuario) {
