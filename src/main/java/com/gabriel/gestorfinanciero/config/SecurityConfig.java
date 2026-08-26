@@ -1,5 +1,8 @@
 package com.gabriel.gestorfinanciero.config;
 
+// 1. Agrega este import (asegúrate de que el paquete coincida con la ubicación real de tu JwtFilter)
+import com.gabriel.gestorfinanciero.security.JwtFilter;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,7 +29,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Activa la configuración de CORS
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -37,21 +40,12 @@ public class SecurityConfig {
                 .build();
     }
 
-    // Configuración global de permisos CORS
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // Permite peticiones desde cualquier origen (ideal para desarrollo y PWA)
         configuration.setAllowedOriginPatterns(List.of("*"));
-
-        // Métodos HTTP permitidos
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-
-        // Cabeceras permitidas (incluyendo Authorization para enviar el JWT)
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
-
-        // Permite el envío de credenciales/tokens
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
