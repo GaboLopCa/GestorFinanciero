@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Permite pre-flights CORS
                         .requestMatchers("/auth/**").permitAll() // Permite registro y login
+                        .requestMatchers("/webhook/**").permitAll() // Permite iOS Shortcuts (auth híbrida en controller)
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

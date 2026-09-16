@@ -137,6 +137,9 @@ El proyecto se considerará funcionalmente exitoso al cumplir los siguientes hit
 * PATCH /finanzas/inversiones/fondo-mutuo/{id}/actualizar-cuota (Protegido - Bearer Token): Actualiza el valor actual de la cuota recalculando automáticamente la ganancia total del fondo.
 * GET /finanzas/inversiones/fondo-mutuo/rendimiento (Protegido - Bearer Token): Retorna el historial de variación de valor de las cuotas y la rentabilidad acumulada.
 
+### 6.3b Módulo Webhook iOS (/webhook)
+* POST /webhook/transacciones (Semi-público — auth híbrida: JWT en `Authorization: Bearer` **o** API key en header `X-Webhook-Token`): Recibe un SMS bancario, lo parsea y crea una transacción automáticamente. Body: `{ "mensaje": "<texto del SMS>", "banco": "SANTANDER|BCI|GENERICO", "fecha": "opcional" }`. Retorna `{ "transaccion": {...}, "parsed": { monto, descripcion, categoria, tipo } }`.
+
 ### 6.4 Variables de Entorno Requeridas
 
 | Variable | Uso | Ejemplo (local) |
@@ -149,8 +152,12 @@ El proyecto se considerará funcionalmente exitoso al cumplir los siguientes hit
 | `SPRING_SHOW_SQL` | Log de SQL (opcional, default `true` local) | `true` / `false` |
 | `SPRING_H2_CONSOLE` | Consola H2 (solo desarrollo, default `true`) | `true` / `false` |
 | `JWT_SECRET` | Clave de firma HS256 (mín. 32 bytes) | Se usa un valor por defecto solo para desarrollo local |
+| `WEBHOOK_SECRET` | API key del webhook iOS (header `X-Webhook-Token`) | `dev_webhook_secret_local` |
+| `WEBHOOK_DEFAULT_EMAIL` | Usuario destino cuando autentica solo con API key | `demo@test.com` |
 
 > ⚠️ En producción (Render) **debe** definirse `JWT_SECRET` con un valor robusto (≥ 32 bytes). Si no se define, la app usa un secret por defecto apto solo para desarrollo.
+>
+> ⚠️ En producción **debe** definirse `WEBHOOK_SECRET` con un valor secreto largo (ej. UUID). `WEBHOOK_DEFAULT_EMAIL` debe apuntar a tu usuario real (ej. `gabriel@test.com`).
 >
 > ℹ️ Hibernate detecta el dialecto automáticamente desde la URL JDBC. `open-in-view` está desactivado (`spring.jpa.open-in-view=false`); las asociaciones perezosas se cargan con `JOIN FETCH` en los repositorios y no fuera de transacción.
 
@@ -161,7 +168,7 @@ Todas las respuestas de error usan el formato JSON `{ "status", "error", "messag
 | Código | Caso | Origen |
 |---|---|---|
 | 400 | Validación falló (`@Valid`), JSON/enum inválido o parámetro mal tipado | `MethodArgumentNotValidException` / `BadRequestException` / `HttpMessageNotReadableException` / `MethodArgumentTypeMismatchException` |
-| 401 | Credenciales inválidas en login | `UnauthorizedException` |
+| 401 | Credenciales inválidas en login o auth del webhook inválida | `UnauthorizedException` |
 | 403 | Acceso a recurso de otro usuario | `ForbiddenException` |
 | 404 | Usuario o recurso no encontrado | `ResourceNotFoundException` |
 | 409 | Email duplicado u otra restricción de integridad | `DataIntegrityViolationException` |
@@ -220,16 +227,142 @@ Todas las respuestas de error usan el formato JSON `{ "status", "error", "messag
 - [x] Mover secret JWT de `JwtUtils.java` a variable de entorno (`JWT_SECRET`).
 - [x] Crear clases de respuesta uniforme (evitar `RuntimeException` — usar respuestas HTTP correctas 401/403/400) → **Hecho: paquete `exception` (GlobalExceptionHandler + excepciones 400/401/403/404/409)**.
 - [x] Limpiar y recompilar `target/` (clases compiladas estaban desactualizadas) → **Resuelto: `mvnw compile` + `mvnw test` regeneran las clases (2026-09-16)**.
-- [x] Agregar tests de integración para controllers y seguridad → **Hecho: `GestorFinancieroIntegrationTests` (17 → 26 tests MockMvc; dependencia `spring-boot-starter-webmvc-test`)**.
+- [x] Agregar tests de integración para controllers y seguridad → **Hecho: `GestorFinancieroIntegrationTests` (36 tests MockMvc + `SmsParserTests` 19 unitarios; dependencia `spring-boot-starter-webmvc-test`)**.
 - [x] Agregar validación de entrada con `@Valid` en controllers → **Hecho: `spring-boot-starter-validation` + anotaciones en modelos y `AuthRequest`**.
 
-### Fase 3: Integración con iOS (Atajos de Apple) ⏳ Pendiente
+### Fase 3: Integración con iOS (Atajos de Apple) 🚧 En Desarrollo
 
-- [ ] Diseño del Webhook en la API para recepción de notificaciones bancarias.
-- [ ] Creación de rutina en iOS Shortcuts para procesar mensajes bancarios y enviar datos a Render.
+**Sub-fase 3.1: Webhook en la API ✅**
+- [x] Diseño del Webhook en la API para recepción de notificaciones bancarias → **Hecho (2026-09-16): `POST /webhook/transacciones`**.
+- [x] Autenticación híbrida: Bearer JWT **o** API key `X-Webhook-Token` (`WebhookAuthService`).
+- [x] Parser de SMS genérico + override por banco (Santander, BCI) con patrones configurables en properties (`webhook.parsers.*`).
+- [x] Persistencia automática de la transacción parseada en la tabla `TRANSACCIONES`.
+- [x] Tests: 19 unitarios de parsing + 10 de integración del webhook → **56 tests totales OK**.
+- [ ] Creación de rutina en iOS Shortcuts para procesar mensajes bancarios y enviar datos a Render → **Guía en la sección 8; la rutina se crea manualmente en el iPhone**.
 
 ### Fase 4: Frontend PWA (Web & Mobile) ⏳ Pendiente
 
 - [ ] Desarrollo de la aplicación web en React con Tailwind CSS.
 - [ ] Integración de Service Worker para funcionamiento PWA (Instalable en iPhone).
 - [ ] Gráficos e indicadores interactivos de liquidez y evolución de cuotas.
+
+---
+
+## 8. Guía de Integración con iOS (Atajos / Shortcuts)
+
+### 8.1 Flujo General
+
+El iPhone no puede "enviar" los SMS automáticamente. Flujo real:
+
+```text
+[Llega SMS bancario]
+        │
+        ▼
+[Usuario abre Atajo "Registrar Compra"]  ← manual (o Automación personal si se habilita)
+        │
+        ▼
+[Shortcut copia el texto del SMS → llama POST /webhook/transacciones]
+        │
+        ▼
+[API parsea el mensaje + guarda Transaccion → responde {transaccion, parsed}]
+        │
+        ▼
+[Shortcut muestra confirmación / se completa]
+```
+
+### 8.2 Endpoint del Webhook
+
+* **URL (Render):** `https://<tu-app>.onrender.com/webhook/transacciones`
+* **URL (local):** `http://localhost:8080/webhook/transacciones`
+* **Método:** `POST`
+* **Headers requeridos:** `Content-Type: application/json` + **una** de estas auth:
+
+| Modo | Header | Valor |
+|---|---|---|
+| API key (recomendado para Shortcuts) | `X-Webhook-Token` | `WEBHOOK_SECRET` de producción |
+| Bearer JWT | `Authorization` | `Bearer <token de /auth/login>` |
+
+* **Body (JSON):**
+```json
+{
+  "mensaje": "Compra por $25.000 en LIDER",
+  "banco": "GENERICO",
+  "fecha": "2026-09-16"
+}
+```
+
+### 8.3 Formatos de SMS soportados
+
+| Banco | Campo `banco` | Patrón | Ejemplo |
+|---|---|---|---|
+| General | `GENERICO` | Compra | `Compra por $25.000 en LIDER` |
+| General | `GENERICO` | Transferencia saliente | `Transferiste $15.000 a Juan Perez` |
+| General | `GENERICO` | Ingreso | `Recibiste $800.000 de Sueldo` |
+| General | `GENERICO` | Depósito | `Depósito de $100.000 recibido` |
+| General | `GENERICO` | Débito | `Débito de $12.000 por internet` |
+| Santander | `SANTANDER` | Compra/Débito | `Tu cuenta Corriente debito por $18.500 en FARMACIA Cruz Verde` |
+| Santander | `SANTANDER` | Transferencia | `Santander: Transferiste $20.000 a Pedro Gomez` |
+| Santander | `SANTANDER` | Ingreso | `Santander: Recibiste $500.000` |
+| BCI | `BCI` | Compra | `BCI Compra por $42.000 en RIPLEY` |
+| BCI | `BCI` | Transferencia | `BCI Transferiste $30.000 a Carlos Lopez` |
+| BCI | `BCI` | Ingreso | `BCI Recibiste $600.000` |
+
+> ℹ️ Si `banco` no coincide con ninguno conocido, se usa el parser genérico automáticamente.
+> Los patrones de Santander/BCI se pueden sobreescribir sin recompilar vía `webhook.parsers.santander.*` y `webhook.parsers.bci.*` en properties/env vars.
+
+### 8.4 Categorías que se asignan automáticamente
+
+| Tipo de mensaje | Tipo transacción | Categoría |
+|---|---|---|
+| Compra | GASTO | `Compras` |
+| Transferencia saliente | GASTO | `Transferencias` |
+| Débito | GASTO | `Gastos Fijos` |
+| Ingreso / Depósito | INGRESO | `Ingresos` |
+| Mensaje genérico (fallback) | GASTO | `Sin categoría` |
+
+### 8.5 Creación de la rutina en iOS Shortcuts (paso a paso)
+
+> Requisitos: iPhone con iOS 16 o superior, app **Atajos** (nativa).
+
+1. Abrir **Atajos** → toco el ícono `+` → **Nuevo atajo**.
+2. Nombre sugerido: `Registrar compra GestorFinanciero`.
+3. Agregar acción **Texto en el portapapeles** (opcional: primero copias el SMS desde Mensajes).
+4. Agregar acción **Obtener texto de entrada**:
+   - *Alto: texto* ✅, botón *Continuar*.
+5. Agregar acción **Variable de texto** para armar el JSON:
+   - Valor:
+     ```
+     {"mensaje":"<TEXTO DEL SMS>","banco":"GENERICO"}
+     ```
+   - (reemplazar `<TEXTO DEL SMS>` por la variable del paso 4 arrastrándola dentro del texto).
+6. Agregar acción **Obtener contenido de la URL**:
+   - *Tipo:* `POST`.
+   - *URL:* `https://<tu-app>.onrender.com/webhook/transacciones`.
+   - *Encabezados:* `Content-Type: application/json` y `X-Webhook-Token: <WEBHOOK_SECRET>`.
+   - *Cuerpo:* `Solicitud>Body: El campo siguiente` + arrastrar la variable JSON del paso 5.
+   - *Continua en app* off.
+7. Agregar acción **Mostrar resultado** (opcional): arrastrar la variable de *Contenido de URL* para ver la respuesta JSON del servidor.
+8. Tocar **Listo** y, para probar: pones un SMS de ejemplo en el portapapeles → ejecutas el atajo → debe aparecer la transacción creada.
+
+**Automatización (opcional):** en la pestaña **Automatización** crear una **Automatización personal**:
+* Condición: `Abre la app` → app Mensajes (o una hora).
+* Acción: ejecutar el atajo `Registrar compra GestorFinanciero`.
+* iOS pedirá confirmación la primera vez; en versiones nuevas se puede desactivar "Preguntar antes de ejecutar".
+
+### 8.6 Prueba rápida local (curl / PowerShell)
+
+```powershell
+$body = '{"mensaje":"Compra por $25.000 en LIDER","banco":"GENERICO"}'
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/webhook/transacciones" `
+  -Headers @{ "Content-Type" = "application/json"; "X-Webhook-Token" = "dev_webhook_secret_local" } `
+  -Body $body
+```
+
+### 8.7 Errores posibles
+
+| Respuesta | Motivo |
+|---|---|
+| 400 | JSON malformado, `mensaje` vacío o SMS sin monto interpretable |
+| 401 | Falta header de auth o API key/JWT inválido |
+| 401 (usuario) | `WEBHOOK_DEFAULT_EMAIL` no existe en la DB (modo API key) |
+| 200 | Mensaje parseado y transacción guardada correctamente |

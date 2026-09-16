@@ -422,4 +422,119 @@ class GestorFinancieroIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.usuario").doesNotExist());
     }
+
+    // ── Webhook (Fase 3) ──
+
+    @Test
+    void webhookConApiKeyValidoCreaTransaccion() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Compra por $25.000 en LIDER\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(25000))
+                .andExpect(jsonPath("$.parsed.tipo").value("GASTO"))
+                .andExpect(jsonPath("$.parsed.categoria").value("Compras"))
+                .andExpect(jsonPath("$.transaccion.id").exists())
+                .andExpect(jsonPath("$.transaccion.monto").value(25000))
+                .andExpect(jsonPath("$.transaccion.categoria").value("Compras"));
+    }
+
+    @Test
+    void webhookConBearerTokenValidoCreaTransaccion() throws Exception {
+        String email = emailAleatorio();
+        registrarUsuario(email);
+        String token = obtenerToken(email);
+
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Transferiste $15.000 a Juan Perez\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(15000))
+                .andExpect(jsonPath("$.parsed.tipo").value("GASTO"))
+                .andExpect(jsonPath("$.parsed.categoria").value("Transferencias"))
+                .andExpect(jsonPath("$.transaccion.id").exists());
+    }
+
+    @Test
+    void webhookSinAuthDevuelve401() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Compra por $25.000 en LIDER\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void webhookConApiKeyInvalidaDevuelve401() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "clave_incorrecta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Compra por $25.000 en LIDER\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void webhookConMensajeVacioDevuelve400() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void webhookConMensajeNoInterpretableDevuelve400() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Texto sin información de monto\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void webhookParseaCompraSantander() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Santander: Compra por $35.000 en JUMBO\",\"banco\":\"SANTANDER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(35000))
+                .andExpect(jsonPath("$.parsed.categoria").value("Compras"));
+    }
+
+    @Test
+    void webhookParseaCompraBci() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"BCI Compra por $42.000 en RIPLEY\",\"banco\":\"BCI\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(42000))
+                .andExpect(jsonPath("$.parsed.categoria").value("Compras"));
+    }
+
+    @Test
+    void webhookParseaDepositoComoIngreso() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Recibiste $800.000 de Sueldo\",\"banco\":\"GENERICO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(800000))
+                .andExpect(jsonPath("$.parsed.tipo").value("INGRESO"))
+                .andExpect(jsonPath("$.parsed.categoria").value("Ingresos"))
+                .andExpect(jsonPath("$.transaccion.tipo").value("INGRESO"));
+    }
+
+    @Test
+    void webhookBancoDesconocidoUsaGenerico() throws Exception {
+        mockMvc.perform(post("/webhook/transacciones")
+                        .header("X-Webhook-Token", "dev_webhook_secret_local")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensaje\":\"Compra por $5.000 en café\",\"banco\":\"OTRO_BANCO\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parsed.monto").value(5000))
+                .andExpect(jsonPath("$.parsed.categoria").value("Compras"));
+    }
 }
