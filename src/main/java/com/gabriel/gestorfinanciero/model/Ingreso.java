@@ -1,7 +1,9 @@
 package com.gabriel.gestorfinanciero.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import org.springframework.cglib.core.Local;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDate;
 
@@ -13,12 +15,18 @@ public class Ingreso {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "La descripción es obligatoria")
     private String descripcion;
+
+    @Min(value = 1, message = "El monto debe ser mayor a 0")
     private int monto; //INT  PARA MONTO EN $CLP
+
+    @NotBlank(message = "La fuente es obligatoria")
     private String fuente;
     private LocalDate fecha;
 
-    @ManyToOne
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 

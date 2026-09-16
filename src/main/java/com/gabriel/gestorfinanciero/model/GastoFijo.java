@@ -1,6 +1,11 @@
 package com.gabriel.gestorfinanciero.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @Entity
 @Table(name = "gastos_fijos")
@@ -10,22 +15,29 @@ public class GastoFijo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "El concepto es obligatorio")
     private String concepto; // Ej: "Arriendo", "Internet", "Subscripción Streaming"
-    private Double monto;
 
+    @Min(value = 1, message = "El monto debe ser mayor a 0")
+    private int monto; // INT PARA MONTO EN $CLP
+
+    @NotNull(message = "La frecuencia es obligatoria")
     @Enumerated(EnumType.STRING)
     private Frecuencia frecuencia;
 
+    @Min(value = 1, message = "El día de cobro debe ser mayor a 0")
+    @Max(value = 31, message = "El día de cobro debe ser menor o igual a 31")
     private Integer diaCobro; // Día del mes o de la semana en que se ejecuta el cobro
     private Boolean pagado = false; // Permite saber si ya se cubrió este mes/semana
 
-    @ManyToOne
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
     public GastoFijo() {}
 
-    public GastoFijo(String concepto, Double monto, Frecuencia frecuencia, Integer diaCobro, Usuario usuario) {
+    public GastoFijo(String concepto, int monto, Frecuencia frecuencia, Integer diaCobro, Usuario usuario) {
         this.concepto = concepto;
         this.monto = monto;
         this.frecuencia = frecuencia;
@@ -41,8 +53,8 @@ public class GastoFijo {
     public String getConcepto() { return concepto; }
     public void setConcepto(String concepto) { this.concepto = concepto; }
 
-    public Double getMonto() { return monto; }
-    public void setMonto(Double monto) { this.monto = monto; }
+    public int getMonto() { return monto; }
+    public void setMonto(int monto) { this.monto = monto; }
 
     public Frecuencia getFrecuencia() { return frecuencia; }
     public void setFrecuencia(Frecuencia frecuencia) { this.frecuencia = frecuencia; }

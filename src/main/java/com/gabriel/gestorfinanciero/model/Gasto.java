@@ -2,6 +2,8 @@ package com.gabriel.gestorfinanciero.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
 public class Gasto {
@@ -9,7 +11,10 @@ public class Gasto {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Min(value = 1, message = "El monto debe ser mayor a 0")
     private int monto; // MONTO EN INT YA QUE ESTÁ PENNSADO PARA CLP
+
+    @NotBlank(message = "La descripción es obligatoria")
     private String descripcion;
 
     @JsonIgnore

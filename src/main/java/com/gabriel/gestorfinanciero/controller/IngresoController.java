@@ -1,9 +1,11 @@
 package com.gabriel.gestorfinanciero.controller;
 
+import com.gabriel.gestorfinanciero.exception.ResourceNotFoundException;
 import com.gabriel.gestorfinanciero.model.Ingreso;
 import com.gabriel.gestorfinanciero.model.Usuario;
 import com.gabriel.gestorfinanciero.repository.IngresoRepository;
 import com.gabriel.gestorfinanciero.repository.UsuarioRepository;
+import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,23 +23,22 @@ public class IngresoController {
         this.usuarioRepository = usuarioRepository;
     }
 
-    // Obtener los ingresos del usuario autenticado
     @GetMapping
     public List<Ingreso> obtenerMisIngresos(Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
         return ingresoRepository.findByUsuarioId(usuario.getId());
     }
 
-    // Registrar un nuevo ingreso
     @PostMapping
-    public Ingreso crearIngreso(@RequestBody Ingreso ingreso, Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
+    public Ingreso crearIngreso(@RequestBody @Valid Ingreso ingreso, Authentication authentication) {
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
         ingreso.setUsuario(usuario);
         return ingresoRepository.save(ingreso);
+    }
+
+    private Usuario obtenerUsuarioAutenticado(Authentication authentication) {
+        String email = authentication.getName();
+        return usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
     }
 }

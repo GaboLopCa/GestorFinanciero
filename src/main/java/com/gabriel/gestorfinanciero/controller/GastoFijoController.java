@@ -1,9 +1,12 @@
 package com.gabriel.gestorfinanciero.controller;
 
+import com.gabriel.gestorfinanciero.exception.ForbiddenException;
+import com.gabriel.gestorfinanciero.exception.ResourceNotFoundException;
 import com.gabriel.gestorfinanciero.model.GastoFijo;
 import com.gabriel.gestorfinanciero.model.Usuario;
 import com.gabriel.gestorfinanciero.repository.GastoFijoRepository;
 import com.gabriel.gestorfinanciero.repository.UsuarioRepository;
+import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,41 +24,37 @@ public class GastoFijoController {
         this.usuarioRepository = usuarioRepository;
     }
 
-    // Obtener todos los gastos fijos del usuario
     @GetMapping
     public List<GastoFijo> obtenerMisGastosFijos(Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
         return gastoFijoRepository.findByUsuarioId(usuario.getId());
     }
 
-    // Crear un nuevo gasto fijo
     @PostMapping
-    public GastoFijo crearGastoFijo(@RequestBody GastoFijo gastoFijo, Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
+    public GastoFijo crearGastoFijo(@RequestBody @Valid GastoFijo gastoFijo, Authentication authentication) {
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
         gastoFijo.setUsuario(usuario);
         return gastoFijoRepository.save(gastoFijo);
     }
 
-    // Cambiar el estado de pago (marcar como pagado o pendiente)
     @PatchMapping("/{id}/toggle-pago")
     public GastoFijo cambiarEstadoPago(@PathVariable Long id, Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
 
-        GastoFijo gastoFijo = gastoFijoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Gasto fijo no encontrado"));
+        GastoFijo gastoFijo = gastoFijoRepository.findByIdConUsuario(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Gasto fijo no encontrado"));
 
         if (!gastoFijo.getUsuario().getId().equals(usuario.getId())) {
-            throw new RuntimeException("No tienes permisos para modificar este recurso");
+            throw new ForbiddenException("No tienes permisos para modificar este recurso");
         }
 
         gastoFijo.setPagado(!gastoFijo.getPagado());
         return gastoFijoRepository.save(gastoFijo);
+    }
+
+    private Usuario obtenerUsuarioAutenticado(Authentication authentication) {
+        String email = authentication.getName();
+        return usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
     }
 }

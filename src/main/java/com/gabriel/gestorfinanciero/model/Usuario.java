@@ -2,6 +2,8 @@ package com.gabriel.gestorfinanciero.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,9 +17,15 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "El nombre es obligatorio")
     private String nombre;
+
+    @NotBlank(message = "El email es obligatorio")
+    @Email(message = "Formato de email inválido")
+    @Column(unique = true, nullable = false)
     private String email;
 
+    @NotBlank(message = "La contraseña es obligatoria")
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 

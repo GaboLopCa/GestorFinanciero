@@ -1,9 +1,11 @@
 package com.gabriel.gestorfinanciero.controller;
 
+import com.gabriel.gestorfinanciero.exception.ResourceNotFoundException;
 import com.gabriel.gestorfinanciero.model.Gasto;
 import com.gabriel.gestorfinanciero.model.Usuario;
 import com.gabriel.gestorfinanciero.repository.GastoRepository;
 import com.gabriel.gestorfinanciero.repository.UsuarioRepository;
+import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,23 +23,22 @@ public class GastoController {
         this.usuarioRepository = usuarioRepository;
     }
 
-    // 1. Obtener solo los gastos pertenecientes al usuario del Token JWT
     @GetMapping
     public List<Gasto> obtenerMisGastos(Authentication authentication) {
-        String email = authentication.getName(); // Extrae el email del JWT procesado por JwtFilter
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
         return gastoRepository.findByUsuarioId(usuario.getId());
     }
 
-    // 2. Crear un gasto y asignarlo automáticamente al usuario autenticado
     @PostMapping
-    public Gasto crearGasto(@RequestBody Gasto gasto, Authentication authentication) {
-        String email = authentication.getName();
-        Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
-        gasto.setUsuario(usuario); // Asignación automática usando el token
+    public Gasto crearGasto(@RequestBody @Valid Gasto gasto, Authentication authentication) {
+        Usuario usuario = obtenerUsuarioAutenticado(authentication);
+        gasto.setUsuario(usuario);
         return gastoRepository.save(gasto);
+    }
+
+    private Usuario obtenerUsuarioAutenticado(Authentication authentication) {
+        String email = authentication.getName();
+        return usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
     }
 }
