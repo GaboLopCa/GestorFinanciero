@@ -161,6 +161,42 @@ class SmsParserTests {
         assertEquals("Compras", result.getCategoria());
     }
 
+    @Test
+    void santanderNotificacionPushCompra() {
+        ParsedSms result = santanderParser.parse("Santander mié, 8:13 p.m. Transacción por $ 15.500. se realizó una compra con tu Tarjeta de Débito 2656 en MERPAGO*EFOODI, el 16-09-2026 a las 20:13:39.");
+        assertNotNull(result);
+        assertEquals(15500, result.getMonto());
+        assertEquals(TipoTransaccion.GASTO, result.getTipo());
+        assertEquals("Compras", result.getCategoria());
+        assertTrue(result.getDescripcion().contains("MERPAGO*EFOODI"));
+    }
+
+    @Test
+    void santanderNotificacionPushIngresoAbono() {
+        ParsedSms result = santanderParser.parse("Santander vie, 10:00 a.m. Transacción por $ 300.000. se realizó un abono en tu cuenta");
+        assertNotNull(result);
+        assertEquals(300000, result.getMonto());
+        assertEquals(TipoTransaccion.INGRESO, result.getTipo());
+        assertEquals("Ingresos", result.getCategoria());
+    }
+
+    @Test
+    void santanderNotificacionPushCompraSinEspacioEnMonto() {
+        ParsedSms result = santanderParser.parse("Transacción por $15.500. se realizó una compra en LIDER");
+        assertNotNull(result);
+        assertEquals(15500, result.getMonto());
+        assertEquals(TipoTransaccion.GASTO, result.getTipo());
+        assertTrue(result.getDescripcion().contains("LIDER"));
+    }
+
+    @Test
+    void genericoConEspacioTrasSignoPeso() {
+        ParsedSms result = genericParser.parse("Compra por $ 25.000 en LIDER");
+        assertNotNull(result);
+        assertEquals(25000, result.getMonto());
+        assertEquals(TipoTransaccion.GASTO, result.getTipo());
+    }
+
     // ── BCI ──
 
     @Test

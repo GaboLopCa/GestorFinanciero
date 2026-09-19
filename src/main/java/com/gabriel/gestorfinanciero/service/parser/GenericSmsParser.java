@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 @Component
 public class GenericSmsParser implements SmsParser {
 
-    private static final String MONTO_REGEX = "\\$([\\d.]+)";
+    private static final String MONTO_REGEX = "\\$\\s*([\\d.]+)";
 
     // Compra: "Compra por $25.000 en LIDER" o "Compra en LIDER por $25.000"
     private static final Pattern PATRON_COMPRA = Pattern.compile(

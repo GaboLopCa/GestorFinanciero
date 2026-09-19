@@ -13,8 +13,11 @@ import java.util.regex.Pattern;
 public class SantanderSmsParser implements SmsParser {
 
     private final Pattern patronCompra;
+    private final Pattern patronCompraNotificacion;
     private final Pattern patronTransferencia;
+    private final Pattern patronTransferenciaNotificacion;
     private final Pattern patronDeposito;
+    private final Pattern patronDepositoNotificacion;
 
     public SantanderSmsParser(
             @Value("${webhook.parsers.santander.compra-pattern:}") String patronCompraStr,
@@ -22,11 +25,17 @@ public class SantanderSmsParser implements SmsParser {
             @Value("${webhook.parsers.santander.deposito-pattern:}") String patronDepositoStr
     ) {
         this.patronCompra = compileOrDefault(patronCompraStr,
-                "(?:Tu\\s+cuenta\\s+\\S+\\s+)?(?:\\S+:\\s+)?(?:Compra|deb[ií]to)\\s+por\\s+\\$([\\d.]+)\\s+(?:en|de|con|@)\\s+(.+?)(?:[\\.:!]|$)");
+                "(?:Tu\\s+cuenta\\s+\\S+\\s+)?(?:\\S+:\\s+)?(?:Compra|deb[ií]to)\\s+(?:por|de)\\s+\\$\\s*([\\d.]+)\\s+(?:en|de|con|@)\\s+(.+?)(?:[.,:!]|$)");
+        this.patronCompraNotificacion = compileOrDefault("",
+                "Transacci[oó]n\\s+(?:por|de)\\s+\\$\\s*([\\d.]+)[.,]?\\s+(?:se\\s+)?realiz[oó]\\s+(?:una\\s+)?compra\\b.*?en\\s+(.+?)(?:[.,:!]|$)", true);
         this.patronTransferencia = compileOrDefault(patronTransferenciaStr,
-                "(?:Tu\\s+cuenta\\s+\\S+\\s+)?(?:\\S+:\\s+)?(?:Transferiste|Enviaste)\\s+\\$([\\d.]+)\\s+a\\s+(.+?)(?:[\\.:!]|$)");
+                "(?:Tu\\s+cuenta\\s+\\S+\\s+)?(?:\\S+:\\s+)?(?:Transferiste|Enviaste)\\s+\\$\\s*([\\d.]+)\\s+a\\s+(.+?)(?:[.,:!]|$)");
+        this.patronTransferenciaNotificacion = compileOrDefault("",
+                "Transacci[oó]n\\s+(?:por|de)\\s+\\$\\s*([\\d.]+)[.,]?\\s+(?:se\\s+)?realiz[oó]\\s+(?:una\\s+)?(?:transferencia|env[ií]o)\\b.*?(?:a\\s+favor\\s+de|hacia|a)\\s+(.+?)(?:[.,:!]|$)", true);
         this.patronDeposito = compileOrDefault(patronDepositoStr,
-                "(?:\\S+:\\s+)?(?:Recibiste|Abon(?:aste|o))\\s+\\$([\\d.]+)");
+                "(?:\\S+:\\s+)?(?:Recibiste|Abon(?:aste|o))\\s+\\$\\s*([\\d.]+)");
+        this.patronDepositoNotificacion = compileOrDefault("",
+                "Transacci[oó]n\\s+(?:por|de)\\s+\\$\\s*([\\d.]+)[.,]?\\s+(?:se\\s+)?(?:realiz[oó]\\s+(?:un|una)\\s+)?(?:abono|dep[oó]sito|transferencia\\s+recibida|transferencia\\s+a\\s+tu\\s+favor)", true);
     }
 
     @Override
@@ -45,11 +54,41 @@ public class SantanderSmsParser implements SmsParser {
             );
         }
 
+        Matcher mCompraNotif = patronCompraNotificacion.matcher(mensaje);
+        if (mCompraNotif.find()) {
+            return new ParsedSms(
+                    parseMonto(mCompraNotif.group(1)),
+                    "Compra en " + mCompraNotif.group(2).trim(),
+                    "Compras",
+                    TipoTransaccion.GASTO
+            );
+        }
+
         Matcher mTransferencia = patronTransferencia.matcher(mensaje);
         if (mTransferencia.find()) {
             return new ParsedSms(
                     parseMonto(mTransferencia.group(1)),
                     "Transferencia a " + mTransferencia.group(2).trim(),
+                    "Transferencias",
+                    TipoTransaccion.GASTO
+            );
+        }
+
+        Matcher mDepositoNotif = patronDepositoNotificacion.matcher(mensaje);
+        if (mDepositoNotif.find()) {
+            return new ParsedSms(
+                    parseMonto(mDepositoNotif.group(1)),
+                    "Ingreso por transferencia",
+                    "Ingresos",
+                    TipoTransaccion.INGRESO
+            );
+        }
+
+        Matcher mTransferenciaNotif = patronTransferenciaNotificacion.matcher(mensaje);
+        if (mTransferenciaNotif.find()) {
+            return new ParsedSms(
+                    parseMonto(mTransferenciaNotif.group(1)),
+                    "Transferencia a " + mTransferenciaNotif.group(2).trim(),
                     "Transferencias",
                     TipoTransaccion.GASTO
             );
@@ -69,7 +108,11 @@ public class SantanderSmsParser implements SmsParser {
     }
 
     private Pattern compileOrDefault(String patronStr, String fallbackRegex) {
-        if (patronStr != null && !patronStr.isBlank()) {
+        return compileOrDefault(patronStr, fallbackRegex, false);
+    }
+
+    private Pattern compileOrDefault(String patronStr, String fallbackRegex, boolean ignorarOverride) {
+        if (!ignorarOverride && patronStr != null && !patronStr.isBlank()) {
             return Pattern.compile(patronStr, Pattern.CASE_INSENSITIVE);
         }
         return Pattern.compile(fallbackRegex, Pattern.CASE_INSENSITIVE);

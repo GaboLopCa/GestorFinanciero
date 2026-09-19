@@ -341,6 +341,10 @@ El iPhone no puede "enviar" los SMS automáticamente. Flujo real:
 | Santander | `SANTANDER` | Compra/Débito | `Tu cuenta Corriente debito por $18.500 en FARMACIA Cruz Verde` |
 | Santander | `SANTANDER` | Transferencia | `Santander: Transferiste $20.000 a Pedro Gomez` |
 | Santander | `SANTANDER` | Ingreso | `Santander: Recibiste $500.000` |
+| Santander | `SANTANDER` | Notificación push (compra) | `Transacción por $ 15.500. se realizó una compra con tu Tarjeta de Débito 2656 en MERPAGO*EFOODI, el 16-09-2026 a las 20:13:39` |
+| Santander | `SANTANDER` | Notificación push (abono) | `Transacción por $ 300.000. se realizó un abono en tu cuenta` |
+
+> ℹ️ El parser Santander también acepta el monto con espacio tras `$` (ej. `$ 15.500`) y las notificaciones push con formato `Transacción por $X. se realizó una compra/transferencia/abono ...`.
 | BCI | `BCI` | Compra | `BCI Compra por $42.000 en RIPLEY` |
 | BCI | `BCI` | Transferencia | `BCI Transferiste $30.000 a Carlos Lopez` |
 | BCI | `BCI` | Ingreso | `BCI Recibiste $600.000` |
