@@ -92,6 +92,8 @@ El proyecto se considerará funcionalmente exitoso al cumplir los siguientes hit
 ### 5.2 Estado Actual de la Base de Datos de Desarrollo (H2)
 
 > Estado documentado de `data/gestordb.mv.db` (H2 embebida, usuario `sa`, sin contraseña). Diagnóstico inicial 2026-09-15; saneamiento de datos aplicado 2026-09-16.
+>
+> ℹ️ **Producción (2026-09-16):** la base de datos de producción migró a **Supabase PostgreSQL** (región `us-east-2`, Ohio). El esquema es generado por Hibernate (`ddl-auto=update`) con las mismas 7 tablas descritas abajo. Ver sección **6.4b** para la configuración de conexión y el hardening RLS (`supabase/schema.sql`).
 
 **Tablas existentes (7):**
 
@@ -151,6 +153,9 @@ El proyecto se considerará funcionalmente exitoso al cumplir los siguientes hit
 | `SPRING_JPA_DIALECT` | Dialecto Hibernate (auto-detected por defecto) | `org.hibernate.dialect.H2Dialect` / `PostgreSQLDialect` |
 | `SPRING_SHOW_SQL` | Log de SQL (opcional, default `true` local) | `true` / `false` |
 | `SPRING_H2_CONSOLE` | Consola H2 (solo desarrollo, default `true`) | `true` / `false` |
+| `DB_POOL_SIZE` | Pool máximo HikariCP (default `5`) | `5` |
+| `DB_POOL_MIN_IDLE` | Conexiones mínimas idle (default `1`) | `1` |
+| `DB_CONNECTION_TIMEOUT` | Timeout de conexión Hikari (ms, default `60000`) | `60000` |
 | `JWT_SECRET` | Clave de firma HS256 (mín. 32 bytes) | Se usa un valor por defecto solo para desarrollo local |
 | `WEBHOOK_SECRET` | API key del webhook iOS (header `X-Webhook-Token`) | `dev_webhook_secret_local` |
 | `WEBHOOK_DEFAULT_EMAIL` | Usuario destino cuando autentica solo con API key | `demo@test.com` |
@@ -160,6 +165,39 @@ El proyecto se considerará funcionalmente exitoso al cumplir los siguientes hit
 > ⚠️ En producción **debe** definirse `WEBHOOK_SECRET` con un valor secreto largo (ej. UUID). `WEBHOOK_DEFAULT_EMAIL` debe apuntar a tu usuario real (ej. `gabriel@test.com`).
 >
 > ℹ️ Hibernate detecta el dialecto automáticamente desde la URL JDBC. `open-in-view` está desactivado (`spring.jpa.open-in-view=false`); las asociaciones perezosas se cargan con `JOIN FETCH` en los repositorios y no fuera de transacción.
+
+### 6.4b Configuración de producción — Base de datos en Supabase (2026-09-16)
+
+> Cambio de DB: la app pasó de PostgreSQL free de Render (limitado, expira a los 30 días) a **Supabase PostgreSQL** (región `us-east-2` / Ohio, la misma zona que Render → menor latencia). Hibernate crea/actualiza el esquema automáticamente (`ddl-auto=update`).
+
+**Parámetros de conexión (Session pooler):**
+
+```
+host=aws-0-us-east-2.pooler.supabase.com
+port=5432
+database=postgres
+user=postgres.gfpekgnsgktpsenkxwdh
+```
+
+**Valores para las variables de entorno en Render:**
+
+| Variable | Valor |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://aws-0-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require` |
+| `SPRING_DATASOURCE_USERNAME` | `postgres.gfpekgnsgktpsenkxwdh` |
+| `SPRING_DATASOURCE_PASSWORD` | *(password del proyecto Supabase, se configura solo en Render, nunca en el repo)* |
+| `SPRING_DATASOURCE_DRIVER` | `org.postgresql.Driver` |
+
+> ⚠️ **Por qué Session pooler (puerto 5432) y no Transaction (6543):** Spring Data JPA/Hibernate usa *server-side prepared statements*, que el transaction pooler de Supabase no soporta. El session pooler sí los soporta y es IPv4 (Render es IPv4; la conexión directa `db.<ref>.supabase.co` es solo IPv6).
+>
+> ⚠️ **SSL obligatorio:** `sslmode=require` debe estar en la URL (Supabase fuerza SSL; el default `prefer` del driver JDBC podría degradar a texto plano). Al usar user/password como env vars separadas no hay problemas de caracteres reservados en la URL.
+>
+> 🌐 **Firewall / IP:** el Session pooler es IPv4-only y acepta tráfico desde Render sin configuración extra.
+
+**Hardening de seguridad (ejecutar 1 vez después del primer deploy):**
+Ejecutar el script `supabase/schema.sql` en el **SQL Editor** de Supabase. Activa Row Level Security en las 7 tablas y revoca privilegios a las roles `anon`/`authenticated` de PostgREST. La app conecta como `postgres` (superusuario) y no se ve afectada.
+
+> ℹ️ **Free tier Supabase:** el compute del proyecto se pausa tras ~1 semana sin actividad; la primera conexión después del letargo tarda unos segundos en despertar (los datos no se pierden).
 
 ### 6.5 Formato Uniforme de Respuestas de Error
 
